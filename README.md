@@ -33,16 +33,12 @@ Windows-Host ──(SSH)──> ubuntu-app (192.168.0.20:8000, myapp)
         ▼
 rocky-gw (192.168.0.21:80, NGINX)
 ```
-## Was mich gebissen hat (und Fix)
+## Was schiefging (und mein Fix)
+- netplan revertet (ich bestätigte netplan try nicht): Fix = netplan generate && netplan apply; danach ip -br a.
+- Port 8000 belegt: ss -ltnp | grep :8000 → PID beendet → App nur noch per systemd starten.
+- SELinux blockt Proxy-Fetch: 502 in NGINX, Audit-Log Deny → Fix = setsebool -P httpd_can_network_connect on.
 
-- netplan „revertet“ → netplan try rollt zurück, wenn man nicht bestätigt
-Fix: netplan generate && netplan apply, danach ip -br a.
-- Port 8000 belegt → ss -ltnp | grep :8000 zeigt PID
-Fix: Prozess beenden, Dienst sauber via systemd starten.
-- SELinux blockt Proxy-Fetch (NGINX→App) → 502 + Audit-Hinweisspur
-Fix: setsebool -P httpd_can_network_connect on.
-
-## Kern-Dateien (Belege im Repo)
+## Belege/Dateien in diesem Repo
 - ubuntu/app.py – Mini-App
 - ubuntu/myapp.service – systemd-Unit
 - rocky/app.conf – NGINX-vHost (Proxy auf 192.168.0.20:8000)
@@ -51,9 +47,9 @@ Fix: setsebool -P httpd_can_network_connect on.
 - rocky/selinux.txt – getenforce + getsebool httpd_can_network_connect
 
 ## Nächste Schritte
-- App produktionsnäher: gunicorn hinter NGINX
-- Mini-Monitoring (systemd Watchdog / node_exporter)
-- Gleiches Setup mit docker-compose oder Ansible reproduzierbar machen
+- App hinter NGINX mit gunicorn betreiben
+- SSH rate-limit (ufw limit) / fail2ban
+- Gleiche Topologie mit Ansible reproduzierbar machen
 
 
 
