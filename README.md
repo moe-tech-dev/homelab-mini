@@ -51,5 +51,9 @@ rocky-gw (192.168.0.21:80, NGINX)
 - SSH rate-limit (ufw limit) / fail2ban
 - Gleiche Topologie mit Ansible reproduzierbar machen
 
+## Files
+- ubuntu/app.py – einfache Flask-App
+- ubuntu/myapp.service – systemd-Unit für Autostart
+- rocky/app.conf – Nginx Proxy Config
 
 
