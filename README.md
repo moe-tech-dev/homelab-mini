@@ -1,59 +1,92 @@
-# Mini-Homelab: App auf Ubuntu, Proxy auf Rocky
-*Stand: Sept 2025 – kleiner Lern- und Bewerbungs-Build.*
+# Mini Homelab
 
-Ich wollte eine kleine Web-App so betreiben, wie man es in der Praxis macht:
-App separat, Proxy separat, feste IPs, SSH nur mit Schlüssel, Firewalls an. **SELinux bleibt auf „enforcing“.**
+A small two-server homelab project that separates the application server from
+the reverse proxy layer.
 
-**Stand (kurz)**
-- **Ubuntu (192.168.0.20)**: Flask-App in venv, als `systemd`-Service `myapp` auf Port **8000**  
-- **Rocky (192.168.0.21)**: **NGINX** als Reverse-Proxy auf Port **80**  
-- **Security**: SSH **Key-Only** (Passwörter aus), **UFW**/**firewalld** aktiv, `getenforce = Enforcing`
+The goal was to practice a more realistic setup than "run everything on one
+machine": separate roles, SSH key-only access, active firewalls, and SELinux
+left enabled.
 
-**Warum so?**  
-Trennung der Rollen (App ↔ Proxy) hält Updates einfach und Fehler klein. Nebenbei lerne ich beide Welten (Ubuntu/apt/ufw ↔ Rocky/dnf/firewalld/SELinux).
+## Overview
 
-## Test in 60 Sekunden
+- Ubuntu app server
+  Runs a small Flask app inside a virtual environment as a `systemd` service on
+  port `8000`.
+- Rocky Linux gateway
+  Runs NGINX as a reverse proxy on port `80`.
+- Security baseline
+  SSH key-only login, firewall enabled, SELinux in `Enforcing` mode.
+
+## Architecture
+
+```text
+Windows host --SSH--> ubuntu-app (192.168.0.20:8000, myapp)
+                         ^
+                         | proxy_pass
+                         v
+                   rocky-gw (192.168.0.21:80, NGINX)
+```
+
+## Why I Built It
+
+I wanted a compact project that demonstrates:
+
+- Linux administration on two distributions
+- reverse proxy basics with NGINX
+- `systemd` service management
+- basic network separation
+- practical hardening choices instead of disabling them
+
+## Quick Test
+
 ```bash
-# auf Rocky
-curl -I http://192.168.0.21/      # → 200 OK
+# on Rocky
+curl -I http://192.168.0.21/
 
-# Ausfall simulieren:
+# simulate app failure
 ssh moe@192.168.0.20 'sudo systemctl stop myapp'
-curl -I http://192.168.0.21/      # → 502 Bad Gateway
+curl -I http://192.168.0.21/
 
-# Fix:
+# recover
 ssh moe@192.168.0.20 'sudo systemctl start myapp'
-curl -I http://192.168.0.21/      # → 200 OK
+curl -I http://192.168.0.21/
 ```
-## Skizze
-```SCSS
-Windows-Host ──(SSH)──> ubuntu-app (192.168.0.20:8000, myapp)
-        ▲
-        │ proxy_pass
-        ▼
-rocky-gw (192.168.0.21:80, NGINX)
-```
-## Was schiefging (und mein Fix)
-- netplan revertet (ich bestätigte netplan try nicht): Fix = netplan generate && netplan apply; danach ip -br a.
-- Port 8000 belegt: ss -ltnp | grep :8000 → PID beendet → App nur noch per systemd starten.
-- SELinux blockt Proxy-Fetch: 502 in NGINX, Audit-Log Deny → Fix = setsebool -P httpd_can_network_connect on.
 
-## Belege/Dateien in diesem Repo
-- ubuntu/app.py – Mini-App
-- ubuntu/myapp.service – systemd-Unit
-- rocky/app.conf – NGINX-vHost (Proxy auf 192.168.0.20:8000)
-- ubuntu/ufw-status.txt – sudo ufw status verbose
-- rocky/firewall-cmd.txt – firewall-cmd --list-services
-- rocky/selinux.txt – getenforce + getsebool httpd_can_network_connect
+Expected behavior:
 
-## Nächste Schritte
-- App hinter NGINX mit gunicorn betreiben
-- SSH rate-limit (ufw limit) / fail2ban
-- Gleiche Topologie mit Ansible reproduzierbar machen
+- healthy app: `200 OK`
+- stopped app service: `502 Bad Gateway`
+- restarted app service: `200 OK`
+
+## Problems I Hit
+
+- `netplan try` reverted because it was not confirmed in time
+  Fix: regenerate and apply the config, then verify addresses with `ip -br a`
+- port `8000` was already in use
+  Fix: identify the process with `ss -ltnp | grep :8000`, stop it, and run the
+  app only through `systemd`
+- SELinux blocked the proxy connection
+  Fix: enable outbound proxy access with
+  `setsebool -P httpd_can_network_connect on`
 
 ## Files
-- ubuntu/app.py – einfache Flask-App
-- ubuntu/myapp.service – systemd-Unit für Autostart
-- rocky/app.conf – Nginx Proxy Config
 
+- `homelab-mini/ubuntu/app.py`
+  Small Flask application
+- `homelab-mini/ubuntu/myapp.service`
+  `systemd` unit for the Ubuntu app service
+- `homelab-mini/rocky/app.conf`
+  NGINX reverse proxy configuration for Rocky Linux
+
+## What I Learned
+
+- splitting app and proxy roles makes failures easier to isolate
+- SELinux should be understood and configured, not just turned off
+- a tiny project can still show useful ops skills if the setup is intentional
+
+## Next Steps
+
+- run the Flask app behind Gunicorn
+- add rate limiting or fail2ban for SSH
+- reproduce the setup with Ansible
 
